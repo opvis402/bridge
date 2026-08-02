@@ -17,26 +17,16 @@ import { openCommand } from '../dist/commands/open.js';
 
 const program = new Command();
 
-// Dynamic Terminal Responsive Banner
+// Clean Borderless Terminal Header
 function printBanner() {
   const termWidth = process.stdout.columns || 80;
+  const lineLength = Math.min(Math.max(termWidth - 4, 30), 54);
 
-  if (termWidth < 62) {
-    // Compact clean header for narrow mobile/small terminals
-    console.log(`
-${chalk.cyan.bold('  O.P.V.I.S.')} ${chalk.yellow('— Tactical AI & CLI Machine Bridge')} ${chalk.gray('v1.0.2')}
-${chalk.gray('  Operation Programmable Virtual Intelligence System')}
-${chalk.cyan('  ' + '─'.repeat(Math.min(termWidth - 4, 52)))}
+  console.log(`
+  ${chalk.cyan.bold('O.P.V.I.S.')} ${chalk.yellow('— Tactical AI & CLI Machine Bridge')} ${chalk.gray('v1.0.2')}
+  ${chalk.gray('Operation Programmable Virtual Intelligence System')}
+  ${chalk.cyan('─'.repeat(lineLength))}
 `);
-  } else {
-    // Cyberpunk boxed header for desktop/wide terminals
-    console.log(`
-${chalk.cyan('  ┌──────────────────────────────────────────────────────────┐')}
-${chalk.cyan('  │')} ${chalk.cyan.bold('O.P.V.I.S.')} ${chalk.gray('— Operation Programmable Virtual Intelligence System')}  ${chalk.cyan('│')}
-${chalk.cyan('  │')} ${chalk.yellow('Bridge Machine Agent')} ${chalk.gray('v1.0.2')} | ${chalk.green('Cloudflare Edge Matrix')}  ${chalk.cyan('│')}
-${chalk.cyan('  └──────────────────────────────────────────────────────────┘')}
-`);
-  }
 }
 
 program
