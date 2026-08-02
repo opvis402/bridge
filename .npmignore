@@ -1,0 +1,12 @@
+# Source files (compiled output in dist/)
+src/
+tsconfig.json
+
+# Dev & CI
+.github/
+node_modules/
+.DS_Store
+*.log
+
+# Lock files
+package-lock.json
