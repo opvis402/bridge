@@ -1,13 +1,20 @@
 {
-  "name": "opvis402/bridge",
+  "name": "@opvis402/bridge",
   "version": "1.0.0",
   "description": "O.P.V.I.S. Bridge — Local agent CLI for connecting to OPVIS cloud",
   "type": "module",
   "bin": {
     "opvis": "./bin/opvis.js"
   },
+  "files": [
+    "bin/",
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "start": "node bin/opvis.js"
   },
   "dependencies": {
@@ -19,11 +26,27 @@
     "@types/node": "^22.10.0",
     "typescript": "^5.6.3"
   },
-  "keywords": ["opvis", "ai", "cli", "cloudflare", "bridge"],
+  "keywords": [
+    "opvis",
+    "ai",
+    "cli",
+    "cloudflare",
+    "bridge",
+    "workers",
+    "jarvis",
+    "tactical"
+  ],
   "author": "OPVIS Team",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/opvis/bridge"
+    "url": "https://github.com/opvis402/bridge"
+  },
+  "homepage": "https://app.opvis.fun",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
