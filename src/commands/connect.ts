@@ -218,7 +218,8 @@ export async function connectCommand(options: ConnectOptions) {
         return;
       }
 
-      // Send chat query to OPVIS AI Brain
+      rl.pause();
+
       const aiSpinner = ora({
         text: chalk.cyan('OPVIS AI is thinking...'),
         spinner: 'dots12',
@@ -242,7 +243,6 @@ export async function connectCommand(options: ConnectOptions) {
         if (!chatRes.ok) {
           aiSpinner.fail(chalk.red('AI Query Failed'));
           console.log(chalk.red(`  HTTP error ${chatRes.status}`));
-          rl.prompt();
           return;
         }
 
@@ -280,9 +280,10 @@ export async function connectCommand(options: ConnectOptions) {
       } catch (err: any) {
         aiSpinner.fail(chalk.red('Network error'));
         console.log(chalk.red(`  ${err.message}`));
+      } finally {
+        rl.resume();
+        rl.prompt();
       }
-
-      rl.prompt();
     });
 
   } catch (err) {
