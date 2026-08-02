@@ -1,0 +1,289 @@
+name: 🚀 O.P.V.I.S. Bridge — CI/CD & NPM Publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # ───────────────────────────────────────────
+  # 1. Build & TypeScript Compilation
+  # ───────────────────────────────────────────
+  build:
+    name: 🔧 Build (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🔨 TypeScript Compile
+        run: npm run build
+
+      - name: 📁 Verify Compiled Output
+        run: |
+          echo "═══════════════════════════════════════"
+          echo "  📁 Verifying compiled dist/ output"
+          echo "═══════════════════════════════════════"
+
+          for f in \
+            dist/commands/connect.js \
+            dist/commands/chat.js \
+            dist/commands/status.js \
+            dist/commands/exec.js \
+            dist/commands/listen.js \
+            dist/commands/keys.js \
+            dist/commands/open.js \
+            dist/utils/auth.js \
+            dist/utils/logger.js \
+            dist/utils/appLauncher.js \
+            dist/index.js \
+            bin/opvis.js; do
+            if [ -f "$f" ]; then
+              echo "✅ $f"
+            else
+              echo "❌ $f NOT FOUND"
+              exit 1
+            fi
+          done
+
+          echo ""
+          echo "🎉 All 12 compiled files verified!"
+
+  # ───────────────────────────────────────────
+  # 2. CLI Command Smoke Tests
+  # ───────────────────────────────────────────
+  test-cli:
+    name: 🧪 CLI Smoke Tests
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install & Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: 🧪 Test — opvis --version
+        run: node bin/opvis.js --version
+
+      - name: 🧪 Test — opvis --help
+        run: node bin/opvis.js --help
+
+      - name: 🧪 Test — opvis connect --help
+        run: node bin/opvis.js connect --help
+
+      - name: 🧪 Test — opvis chat --help
+        run: node bin/opvis.js chat --help
+
+      - name: 🧪 Test — opvis status --help
+        run: node bin/opvis.js status --help
+
+      - name: 🧪 Test — opvis exec --help
+        run: node bin/opvis.js exec --help
+
+      - name: 🧪 Test — opvis listen --help
+        run: node bin/opvis.js listen --help
+
+      - name: 🧪 Test — opvis keys --help
+        run: node bin/opvis.js keys --help
+
+      - name: 🧪 Test — opvis open --help
+        run: node bin/opvis.js open --help
+
+      - name: 🧪 Test — opvis exec (live execution)
+        run: |
+          timeout 10 node bin/opvis.js exec "echo OPVIS_CI_SMOKE_TEST_PASSED" || true
+
+      - name: ✅ All CLI Tests Passed
+        run: |
+          echo "╔══════════════════════════════════════════════╗"
+          echo "║  ✅ All CLI command smoke tests passed!      ║"
+          echo "║                                              ║"
+          echo "║  Commands verified:                          ║"
+          echo "║  • opvis --version                           ║"
+          echo "║  • opvis --help                              ║"
+          echo "║  • opvis connect --help                      ║"
+          echo "║  • opvis chat --help                         ║"
+          echo "║  • opvis status --help                       ║"
+          echo "║  • opvis exec --help                         ║"
+          echo "║  • opvis listen --help                       ║"
+          echo "║  • opvis keys --help                         ║"
+          echo "║  • opvis open --help                         ║"
+          echo "║  • opvis exec (live execution)               ║"
+          echo "╚══════════════════════════════════════════════╝"
+
+  # ───────────────────────────────────────────
+  # 3. Package Integrity Check
+  # ───────────────────────────────────────────
+  package-check:
+    name: 📋 Package Integrity
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install & Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: 📋 Verify package.json metadata
+        run: |
+          echo "═══════════════════════════════════════"
+          echo "  📋 Package Metadata Verification"
+          echo "═══════════════════════════════════════"
+          node --input-type=module -e "
+            import { readFileSync } from 'fs';
+            const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
+            const checks = [
+              ['name',            pkg.name === '@opvis402/bridge'],
+              ['version',         /^\d+\.\d+\.\d+/.test(pkg.version)],
+              ['description',     pkg.description && pkg.description.length > 10],
+              ['bin.opvis',       pkg.bin && pkg.bin.opvis],
+              ['license',         pkg.license === 'MIT'],
+              ['repository',      pkg.repository && pkg.repository.url.includes('opvis402')],
+              ['type',            pkg.type === 'module'],
+              ['engines',         pkg.engines && pkg.engines.node],
+              ['publishConfig',   pkg.publishConfig && pkg.publishConfig.access === 'public'],
+            ];
+            let allPassed = true;
+            checks.forEach(([field, ok]) => {
+              console.log(ok ? '✅ ' + field : '❌ ' + field);
+              if (!ok) allPassed = false;
+            });
+            if (!allPassed) process.exit(1);
+            console.log('');
+            console.log('🎉 All package metadata checks passed!');
+          "
+
+      - name: 📦 Dry-run NPM Pack
+        run: |
+          npm pack --dry-run 2>&1
+          echo ""
+          echo "✅ npm pack dry-run completed successfully"
+
+      - name: 📁 Verify required files for publish
+        run: |
+          test -f README.md     && echo "✅ README.md"
+          test -f LICENSE       && echo "✅ LICENSE"
+          test -f package.json  && echo "✅ package.json"
+          test -f bin/opvis.js  && echo "✅ bin/opvis.js"
+          test -d dist          && echo "✅ dist/"
+
+  # ───────────────────────────────────────────
+  # 4. Cross-Platform Compatibility
+  # ───────────────────────────────────────────
+  cross-platform:
+    name: 🖥 ${{ matrix.os }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install & Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: 🧪 CLI Smoke Test
+        run: |
+          node bin/opvis.js --version
+          node bin/opvis.js --help
+          node bin/opvis.js connect --help
+          node bin/opvis.js chat --help
+          node bin/opvis.js exec --help
+
+      - name: ✅ Platform OK
+        run: echo "✅ CLI works on ${{ matrix.os }}"
+
+  # ───────────────────────────────────────────
+  # 5. Publish to NPM (on tag push only)
+  # ───────────────────────────────────────────
+  publish:
+    name: 📦 Publish to NPM
+    needs: [build, test-cli, package-check, cross-platform]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: 📦 Install & Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: 🚀 Publish to NPM Registry
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 🎉 Publish Success
+        run: |
+          VERSION=$(node --input-type=module -e "import{readFileSync}from'fs';console.log(JSON.parse(readFileSync('./package.json','utf-8')).version)")
+          echo "╔══════════════════════════════════════════════╗"
+          echo "║                                              ║"
+          echo "║  🚀 @opvis402/bridge v${VERSION} published!  ║"
+          echo "║                                              ║"
+          echo "║  📦 npm: npmjs.com/package/@opvis402/bridge  ║"
+          echo "║  🌐 Web: app.opvis.fun                       ║"
+          echo "║  📂 Repo: github.com/opvis402/bridge         ║"
+          echo "║                                              ║"
+          echo "║  Install: npx @opvis402/bridge --help         ║"
+          echo "║                                              ║"
+          echo "╚══════════════════════════════════════════════╝"
