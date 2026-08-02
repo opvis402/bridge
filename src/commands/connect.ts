@@ -205,17 +205,21 @@ export async function connectCommand(options: ConnectOptions) {
         return;
       }
 
-      // Handle 'open <app>' shortcut locally
+      // Handle 'open <app>' or 'launch <app>' shortcut locally with smart AI assistance on failure
+      let queryMessage = input;
       if (input.startsWith('open ') || input.startsWith('launch ')) {
-        const appTarget = input.replace(/^(open|launch)\s+/, '');
+        const appTarget = input.replace(/^(open|launch)\s+/, '').trim();
         const res = await launchApp(appTarget);
+
         if (res.success) {
           console.log(chalk.green(`  ✓ ${res.message}`));
-        } else {
-          console.log(chalk.red(`  ✗ ${res.message}`));
+          rl.prompt();
+          return;
         }
-        rl.prompt();
-        return;
+
+        // On launch failure, report cleanly and pass to OPVIS AI for guidance
+        console.log(chalk.red(`  ✗ ${res.message}`));
+        queryMessage = `I tried to launch "${appTarget}" on my ${os.platform()} machine but it failed because "${appTarget}" was not found in PATH or not installed. Please explain how I can install or open "${appTarget}" on ${os.platform()}.`;
       }
 
       rl.pause();
@@ -234,7 +238,7 @@ export async function connectCommand(options: ConnectOptions) {
             'Authorization': `Bearer ${options.apiKey}`,
           },
           body: JSON.stringify({
-            message: input,
+            message: queryMessage,
             model: '@cf/meta/llama-3.1-70b-instruct',
             session_id: `cli_${bridgeId}`,
           }),
