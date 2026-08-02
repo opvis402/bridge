@@ -15,6 +15,15 @@ import { listenCommand } from '../dist/commands/listen.js';
 import { keysCommand } from '../dist/commands/keys.js';
 import { openCommand } from '../dist/commands/open.js';
 
+// Prevent unhandled errors from force-closing the CLI process
+process.on('uncaughtException', (err) => {
+  console.log(chalk.yellow(`  [!] Warning: ${err.message}`));
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.log(chalk.yellow(`  [!] Warning: ${reason?.message || reason}`));
+});
+
 const program = new Command();
 
 // Clean Borderless Terminal Header
