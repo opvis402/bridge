@@ -13,24 +13,16 @@ export interface VoiceOptions {
 }
 
 /**
- * Generate a clean, concise spoken summary of AI response (like web app voice summary)
- * Removes code blocks, URLs, markdown lists (1. 2. 3.), and technical headers
+ * Clean markdown tags and symbols for spoken audio
  */
-export function createVoiceSummary(fullText: string): string {
-  if (!fullText || !fullText.trim()) return '';
+export function cleanTextForSpeech(rawText: string): string {
+  if (!rawText || !rawText.trim()) return '';
 
-  let text = fullText;
-
-  // 1. Remove code blocks
-  text = text.replace(/```[\s\S]*?```/g, '');
-
-  // 2. Remove markdown links and URLs
-  text = text.replace(/\[(.*?)\]\((https?:\/\/|\/)?.*?\)/g, '$1');
-  text = text.replace(/https?:\/\/\S+/g, '');
-  text = text.replace(/www\.\S+/g, '');
-
-  // 3. Remove option headers and bold markers
-  text = text
+  return rawText
+    .replace(/```[\s\S]*?```/g, '')     // Remove code blocks
+    .replace(/\[(.*?)\]\((https?:\/\/|\/)?.*?\)/g, '$1') // Remove MD links
+    .replace(/https?:\/\/\S+/g, '')     // Remove URLs
+    .replace(/www\.\S+/g, '')           // Remove www URLs
     .replace(/\*\*RECOMMENDATIONS\*\*/gi, '')
     .replace(/\*\*OPTION\s+\d+:?\s*/gi, '')
     .replace(/^#+\s+/gm, '')           // Headings # ## ###
@@ -39,27 +31,34 @@ export function createVoiceSummary(fullText: string): string {
     .replace(/`(.*?)`/g, '$1')         // `code`
     .replace(/^\s*\d+\.\s*/gm, '')     // Numbered lists 1. 2. 3.
     .replace(/^\s*[-*+]\s*/gm, '')     // Bullet lists - * +
-    .replace(/[`"$]/g, '');            // Shell chars
+    .replace(/[`"$]/g, '')             // Shell chars
+    .replace(/\s+/g, ' ')              // Normalize whitespace
+    .trim();
+}
 
-  // 4. Split into clean non-empty sentences/paragraphs
-  const paragraphs = text
-    .split(/\n+/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 5);
+/**
+ * Generate a clean, concise spoken summary of long AI response (like web app voice summary)
+ */
+export function createVoiceSummary(fullText: string): string {
+  const cleaned = cleanTextForSpeech(fullText);
+  if (!cleaned) return '';
 
-  if (paragraphs.length === 0) return '';
+  // Split into clean sentences
+  const sentences = cleaned
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
-  // Take the first 2-3 clean lines as concise spoken summary
-  let summary = paragraphs.slice(0, 3).join('. ');
+  if (sentences.length === 0) return cleaned;
 
-  // Clean up punctuation and whitespace
-  summary = summary.replace(/\.+/g, '.').replace(/\s+/g, ' ').trim();
+  // Take the first 2-3 sentences as concise spoken summary
+  let summary = sentences.slice(0, 3).join(' ');
 
   // Limit summary length to ~280 chars to ensure punchy, natural voice speech
   if (summary.length > 280) {
     const cut = summary.slice(0, 280);
     const lastDot = cut.lastIndexOf('.');
-    summary = lastDot > 80 ? cut.slice(0, lastDot + 1) : cut + '.';
+    summary = lastDot > 50 ? cut.slice(0, lastDot + 1) : cut + '.';
   }
 
   return summary;
@@ -70,30 +69,25 @@ export function createVoiceSummary(fullText: string): string {
  */
 export function speakText(text: string, options: VoiceOptions = {}): Promise<void> {
   const platform = os.platform();
-  const cleanText = createVoiceSummary(text);
+  const cleanText = cleanTextForSpeech(text);
 
   if (!cleanText) return Promise.resolve();
 
   return new Promise((resolve) => {
     try {
       if (platform === 'win32') {
-        // Windows SAPI SpeechSynthesizer via PowerShell
-        const rate = options.rate || 1;
-        const volume = options.volume || 100;
-        const script = `
-          Add-Type -AssemblyName System.Speech;
-          $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer;
-          $synth.Rate = ${rate};
-          $synth.Volume = ${volume};
-          $synth.Speak("${cleanText.replace(/"/g, '`"')}");
-        `;
-        exec(`powershell -NoProfile -Command "${script.replace(/\n/g, ' ')}"`, () => resolve());
+        // Windows SAPI.SpVoice COM Object via PowerShell (100% reliable execution)
+        const safeText = cleanText.replace(/'/g, "''").replace(/[\r\n]+/g, ' ');
+        const psCmd = `powershell -NoProfile -Command "(New-Object -ComObject SAPI.SpVoice).Speak('${safeText}')"`;
+        exec(psCmd, () => resolve());
       } else if (platform === 'darwin') {
         // macOS 'say' command
-        exec(`say "${cleanText.replace(/"/g, '\\"')}"`, () => resolve());
+        const safeText = cleanText.replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
+        exec(`say "${safeText}"`, () => resolve());
       } else if (platform === 'linux') {
         // Linux 'spd-say' or 'espeak'
-        exec(`spd-say "${cleanText.replace(/"/g, '\\"')}" || espeak "${cleanText.replace(/"/g, '\\"')}"`, () => resolve());
+        const safeText = cleanText.replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
+        exec(`spd-say "${safeText}" || espeak "${safeText}"`, () => resolve());
       } else {
         resolve();
       }
