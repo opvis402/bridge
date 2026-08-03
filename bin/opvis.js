@@ -17,6 +17,7 @@ import { openCommand } from '../dist/commands/open.js';
 import { installCommand } from '../dist/commands/install.js';
 import { repairCommand } from '../dist/commands/repair.js';
 import { diagnoseCommand } from '../dist/commands/diagnose.js';
+import { voiceCommand } from '../dist/commands/voice.js';
 
 // Prevent unhandled errors from force-closing the CLI process
 process.on('uncaughtException', (err) => {
@@ -54,6 +55,7 @@ program
   .command('install')
   .description('Install any application automatically via native package managers (winget/brew/apt)')
   .argument('<appName>', 'Application name or package ID (e.g. git, vscode, node, python, chrome)')
+  .option('-y, --yes', 'Automatically approve installation without prompt')
   .action(installCommand);
 
 // Repair / Fix command
@@ -62,6 +64,7 @@ program
   .alias('fix')
   .description('Autonomous problem-solving engine to diagnose & repair broken applications or system PATH')
   .argument('[appName]', 'Application name to repair, or leave empty to repair entire system environment')
+  .option('-y, --yes', 'Automatically approve repair action without prompt')
   .action(repairCommand);
 
 // Diagnose command
@@ -69,6 +72,18 @@ program
   .command('diagnose')
   .description('Scan system readiness, installed developer tools, and overall environment health')
   .action(diagnoseCommand);
+
+// Voice & Conversational Stream Mode command
+program
+  .command('voice')
+  .alias('talk')
+  .alias('stream')
+  .description('Continuous natural voice & text chat stream session with OPVIS Brain ("Ngobrol Saja")')
+  .option('--api-key <key>', 'API key for authentication')
+  .option('--endpoint <url>', 'OPVIS cloud endpoint', 'https://app.opvis.fun')
+  .option('--model <model>', 'AI model to use', '@cf/meta/llama-3.1-70b-instruct')
+  .option('--no-voice', 'Disable audio speech synthesis')
+  .action(voiceCommand);
 
 // Connect command
 program
