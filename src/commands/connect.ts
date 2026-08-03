@@ -92,6 +92,28 @@ export async function connectCommand(options: ConnectOptions) {
             console.log('\n' + chalk.yellow(`  [⚡ REMOTE COMMAND] `) + chalk.white(item.command));
 
             const cmdText = item.command.trim();
+            const lowerCmd = cmdText.toLowerCase();
+
+            if (lowerCmd === 'exit' || lowerCmd === 'quit' || lowerCmd === 'disconnect' || lowerCmd === 'opvis exit' || lowerCmd === 'opvis disconnect') {
+              console.log(chalk.yellow('\n  [⛔ DISCONNECT SIGNAL RECEIVED FROM WEB DASHBOARD]'));
+              console.log(chalk.gray('  Shutting down local CLI bridge agent gracefully...\n'));
+
+              try {
+                await fetch(`${endpoint}/api/bridge/commands`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'update',
+                    command_id: item.id,
+                    output: 'Bridge agent disconnected and exited by web dashboard user.',
+                    exit_code: 0,
+                    status: 'completed',
+                  }),
+                });
+              } catch {}
+
+              process.exit(0);
+            }
 
             if (cmdText.startsWith('open ') || cmdText.startsWith('launch ')) {
               const appTarget = cmdText.replace(/^(open|launch)\s+/, '');
