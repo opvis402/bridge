@@ -89,7 +89,7 @@ function searchWindowsBinaryPaths(appName: string): string | null {
   }
 
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
       return candidate;
     }
   }
@@ -116,9 +116,15 @@ export async function diagnoseApp(appName: string): Promise<DiagnosticReport> {
   try {
     const stdout = execSync(checkCmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     if (stdout) {
-      report.inPath = true;
-      report.binaryFound = true;
-      report.binaryPath = stdout.split('\n')[0].trim();
+      const candidatePaths = stdout.split(/\r?\n/).map((p) => p.trim()).filter((p) => p.length > 0);
+      for (const candidate of candidatePaths) {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          report.inPath = true;
+          report.binaryFound = true;
+          report.binaryPath = candidate;
+          break;
+        }
+      }
     }
   } catch {
     report.inPath = false;
