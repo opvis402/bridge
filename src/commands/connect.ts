@@ -79,6 +79,7 @@ export async function connectCommand(options: ConnectOptions) {
     console.log(chalk.gray('  [i] Interactive Chat REPL ready below. Type any question or command (Ctrl+C to disconnect).\n'));
 
     // 1. Background Remote Command Polling Loop
+    const sessionStartTime = Date.now();
     let isShuttingDown = false;
     const pollInterval = setInterval(async () => {
       if (isShuttingDown) return;
@@ -89,6 +90,24 @@ export async function connectCommand(options: ConnectOptions) {
           const commands = json.data?.commands || [];
 
           for (const item of commands) {
+            // Ignore & clear any stale commands created before this connection session started
+            if (item.created_at && item.created_at < sessionStartTime - 3000) {
+              try {
+                await fetch(`${endpoint}/api/bridge/commands`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'update',
+                    command_id: item.id,
+                    output: 'Stale command ignored on reconnection.',
+                    exit_code: 0,
+                    status: 'cancelled',
+                  }),
+                });
+              } catch {}
+              continue;
+            }
+
             console.log('\n' + chalk.yellow(`  [⚡ REMOTE COMMAND] `) + chalk.white(item.command));
 
             const cmdText = item.command.trim();
