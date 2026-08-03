@@ -9,4 +9,6 @@ export { execCommand } from './commands/exec.js';
 export { installCommand } from './commands/install.js';
 export { repairCommand } from './commands/repair.js';
 export { diagnoseCommand } from './commands/diagnose.js';
+export { voiceCommand } from './commands/voice.js';
+
 
