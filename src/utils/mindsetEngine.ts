@@ -9,8 +9,10 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { detectPackageManager, buildRepairCommand, APP_DICTIONARY } from './installer.js';
+import { confirmAction, showApproveRejectPopup } from './prompt.js';
 
 export interface DiagnosticReport {
+
   target: string;
   binaryFound: boolean;
   binaryPath?: string;
@@ -162,7 +164,7 @@ export async function diagnoseApp(appName: string): Promise<DiagnosticReport> {
 /**
  * Execute Problem-Solving Repair Engine
  */
-export async function repairApp(appName: string): Promise<RepairResult> {
+export async function repairApp(appName: string, options: { yes?: boolean } = {}): Promise<RepairResult> {
   const steps: string[] = [];
 
   mindsetLogger.stage(`DIAGNOSING TARGET: ${appName.toUpperCase()}`);
@@ -188,12 +190,30 @@ export async function repairApp(appName: string): Promise<RepairResult> {
     mindsetLogger.action(`Package Manager detected: [${pm.name}]. Preparing force reinstall/repair execution...`);
 
     const repairCmd = buildRepairCommand(appName, pm);
-    mindsetLogger.step(1, `Executing command: ${chalk.cyan(repairCmd)}`);
+    mindsetLogger.step(1, `Command to execute: ${chalk.cyan(repairCmd)}`);
+
+    // Interactive user approval check
+    if (!options.yes) {
+      const confirmed = await showApproveRejectPopup(`Repair Request: Execute force reinstall strategy for "${appName}" via [${pm.name}]`, {
+        title: 'OPVIS REPAIR AUTHORIZATION POPUP',
+        useGuiFallback: true,
+      });
+      if (!confirmed) {
+        mindsetLogger.analysis('Repair operation cancelled by user approval policy.');
+        return {
+          success: false,
+          stepsExecuted: steps,
+          message: `Repair operation for "${appName}" was cancelled by user.`,
+        };
+      }
+    }
+
     steps.push(`Executed package repair command: ${repairCmd}`);
 
     try {
       execSync(repairCmd, { stdio: 'inherit' });
       mindsetLogger.success(`Package repair command finished successfully.`);
+
 
       // Post-repair verification
       mindsetLogger.stage('VERIFYING REPAIR RESULT');
