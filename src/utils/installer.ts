@@ -14,7 +14,7 @@ export interface InstallResult {
 
 export type OSPlatform = 'win32' | 'darwin' | 'linux';
 
-// Known app ID mappings for package managers
+// Known exact app ID mappings for package managers
 export const APP_DICTIONARY: Record<string, { win32?: string; darwin?: string; linux?: string; label: string }> = {
   git: { win32: 'Git.Git', darwin: 'git', linux: 'git', label: 'Git Version Control' },
   vscode: { win32: 'Microsoft.VisualStudioCode', darwin: 'visual-studio-code', linux: 'code', label: 'Visual Studio Code' },
@@ -31,6 +31,18 @@ export const APP_DICTIONARY: Record<string, { win32?: string; darwin?: string; l
   curl: { win32: 'cURL.cURL', darwin: 'curl', linux: 'curl', label: 'cURL Transfer Tool' },
   powershell: { win32: 'Microsoft.PowerShell', darwin: 'powershell', linux: 'powershell', label: 'PowerShell Core' },
   vlc: { win32: 'VideoLAN.VLC', darwin: 'vlc', linux: 'vlc', label: 'VLC Media Player' },
+  whatsapp: { win32: '9NKSQGP7F2NH', darwin: 'whatsapp', linux: 'whatsapp', label: 'WhatsApp Desktop' },
+  telegram: { win32: 'Telegram.TelegramDesktop', darwin: 'telegram', linux: 'telegram-desktop', label: 'Telegram Desktop' },
+  discord: { win32: 'Discord.Discord', darwin: 'discord', linux: 'discord', label: 'Discord' },
+  spotify: { win32: 'Spotify.Spotify', darwin: 'spotify', linux: 'spotify', label: 'Spotify' },
+  slack: { win32: 'SlackTechnologies.Slack', darwin: 'slack', linux: 'slack-desktop', label: 'Slack' },
+  zoom: { win32: 'Zoom.Zoom', darwin: 'zoom', linux: 'zoom', label: 'Zoom' },
+  notion: { win32: 'Notion.Notion', darwin: 'notion', linux: 'notion-app', label: 'Notion' },
+  postman: { win32: 'Postman.Postman', darwin: 'postman', linux: 'postman', label: 'Postman' },
+  obs: { win32: 'OBSProject.OBSStudio', darwin: 'obs', linux: 'obs-studio', label: 'OBS Studio' },
+  brave: { win32: 'Brave.Brave', darwin: 'brave-browser', linux: 'brave-browser', label: 'Brave Browser' },
+  edge: { win32: 'Microsoft.Edge', darwin: 'microsoft-edge', linux: 'microsoft-edge-stable', label: 'Microsoft Edge' },
+  firefox: { win32: 'Mozilla.Firefox', darwin: 'firefox', linux: 'firefox', label: 'Mozilla Firefox' },
 };
 
 /**
@@ -76,7 +88,7 @@ export function detectPackageManager(): { name: string; command: string } | null
 }
 
 /**
- * Build install command string for specified package manager & app
+ * Build primary install command string
  */
 export function buildInstallCommand(appName: string, pm: { name: string; command: string }): string {
   const platform = os.platform() as OSPlatform;
@@ -86,7 +98,7 @@ export function buildInstallCommand(appName: string, pm: { name: string; command
 
   switch (pm.name) {
     case 'winget':
-      return `winget install --id "${pkgId}" -e --accept-source-agreements --accept-package-agreements`;
+      return `winget install --id "${pkgId}" --accept-source-agreements --accept-package-agreements`;
     case 'chocolatey':
       return `choco install "${pkgId}" -y`;
     case 'scoop':
@@ -105,6 +117,18 @@ export function buildInstallCommand(appName: string, pm: { name: string; command
 }
 
 /**
+ * Build fallback install command string if exact ID match fails
+ */
+export function buildFallbackInstallCommand(appName: string, pm: { name: string; command: string }): string {
+  switch (pm.name) {
+    case 'winget':
+      return `winget install "${appName}" --accept-source-agreements --accept-package-agreements`;
+    default:
+      return buildInstallCommand(appName, pm);
+  }
+}
+
+/**
  * Build repair / reinstall command string
  */
 export function buildRepairCommand(appName: string, pm: { name: string; command: string }): string {
@@ -115,7 +139,7 @@ export function buildRepairCommand(appName: string, pm: { name: string; command:
 
   switch (pm.name) {
     case 'winget':
-      return `winget install --id "${pkgId}" -e --force --accept-source-agreements --accept-package-agreements`;
+      return `winget install --id "${pkgId}" --force --accept-source-agreements --accept-package-agreements`;
     case 'chocolatey':
       return `choco reinstall "${pkgId}" -y`;
     case 'scoop':
@@ -134,7 +158,7 @@ export function buildRepairCommand(appName: string, pm: { name: string; command:
 }
 
 /**
- * Execute app installation with promise wrapper
+ * Execute app installation with fallback retry
  */
 export function executeInstall(appName: string): Promise<InstallResult> {
   return new Promise((resolve) => {
@@ -146,22 +170,42 @@ export function executeInstall(appName: string): Promise<InstallResult> {
       });
     }
 
-    const cmd = buildInstallCommand(appName, pm);
+    const primaryCmd = buildInstallCommand(appName, pm);
 
-    exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err) => {
-      if (err) {
-        resolve({
-          success: false,
-          message: `Installation failed using ${pm.name}: ${err.message}`,
-          pkgManagerUsed: pm.name,
-        });
-      } else {
-        resolve({
+    exec(primaryCmd, { maxBuffer: 10 * 1024 * 1024 }, (err) => {
+      if (!err) {
+        return resolve({
           success: true,
           message: `Successfully installed "${appName}" via ${pm.name}!`,
           pkgManagerUsed: pm.name,
         });
       }
+
+      // Try fallback fuzzy search command if primary ID match failed
+      const fallbackCmd = buildFallbackInstallCommand(appName, pm);
+      if (fallbackCmd === primaryCmd) {
+        return resolve({
+          success: false,
+          message: `Installation failed using ${pm.name}: ${err.message}`,
+          pkgManagerUsed: pm.name,
+        });
+      }
+
+      exec(fallbackCmd, { maxBuffer: 10 * 1024 * 1024 }, (fallbackErr) => {
+        if (!fallbackErr) {
+          resolve({
+            success: true,
+            message: `Successfully installed "${appName}" via ${pm.name}!`,
+            pkgManagerUsed: pm.name,
+          });
+        } else {
+          resolve({
+            success: false,
+            message: `Installation failed using ${pm.name}: ${err.message}`,
+            pkgManagerUsed: pm.name,
+          });
+        }
+      });
     });
   });
 }
