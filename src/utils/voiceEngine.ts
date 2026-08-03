@@ -1,11 +1,10 @@
 // ============================================================
 // O.P.V.I.S. Bridge — Voice & Speech Synthesis Streaming Engine
-// Text-to-Speech & Voice Stream output for Windows, macOS, & Linux
+// Text-to-Speech & Voice Summary generator for Windows, macOS, & Linux
 // ============================================================
 
-import { exec, execSync } from 'child_process';
+import { exec } from 'child_process';
 import os from 'os';
-import chalk from 'chalk';
 
 export interface VoiceOptions {
   enabled?: boolean;
@@ -14,17 +13,56 @@ export interface VoiceOptions {
 }
 
 /**
- * Strip Markdown tags and symbols for clean spoken audio
+ * Generate a clean, concise spoken summary of AI response (like web app voice summary)
+ * Removes code blocks, URLs, markdown lists (1. 2. 3.), and technical headers
  */
-export function cleanTextForSpeech(rawText: string): string {
-  return rawText
-    .replace(/\*\*(.*?)\*\*/g, '$1') // Bold **text**
-    .replace(/\*(.*?)\*/g, '$1')     // Italic *text*
-    .replace(/`(.*?)`/g, '$1')       // Inline code `code`
-    .replace(/#+\s/g, '')            // Headings # ## ###
-    .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Markdown links [text](url)
-    .replace(/[`"$]/g, '')           // Shell special chars
-    .trim();
+export function createVoiceSummary(fullText: string): string {
+  if (!fullText || !fullText.trim()) return '';
+
+  let text = fullText;
+
+  // 1. Remove code blocks
+  text = text.replace(/```[\s\S]*?```/g, '');
+
+  // 2. Remove markdown links and URLs
+  text = text.replace(/\[(.*?)\]\((https?:\/\/|\/)?.*?\)/g, '$1');
+  text = text.replace(/https?:\/\/\S+/g, '');
+  text = text.replace(/www\.\S+/g, '');
+
+  // 3. Remove option headers and bold markers
+  text = text
+    .replace(/\*\*RECOMMENDATIONS\*\*/gi, '')
+    .replace(/\*\*OPTION\s+\d+:?\s*/gi, '')
+    .replace(/^#+\s+/gm, '')           // Headings # ## ###
+    .replace(/\*\*(.*?)\*\*/g, '$1')   // **bold**
+    .replace(/\*(.*?)\*/g, '$1')       // *italic*
+    .replace(/`(.*?)`/g, '$1')         // `code`
+    .replace(/^\s*\d+\.\s*/gm, '')     // Numbered lists 1. 2. 3.
+    .replace(/^\s*[-*+]\s*/gm, '')     // Bullet lists - * +
+    .replace(/[`"$]/g, '');            // Shell chars
+
+  // 4. Split into clean non-empty sentences/paragraphs
+  const paragraphs = text
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 5);
+
+  if (paragraphs.length === 0) return '';
+
+  // Take the first 2-3 clean lines as concise spoken summary
+  let summary = paragraphs.slice(0, 3).join('. ');
+
+  // Clean up punctuation and whitespace
+  summary = summary.replace(/\.+/g, '.').replace(/\s+/g, ' ').trim();
+
+  // Limit summary length to ~280 chars to ensure punchy, natural voice speech
+  if (summary.length > 280) {
+    const cut = summary.slice(0, 280);
+    const lastDot = cut.lastIndexOf('.');
+    summary = lastDot > 80 ? cut.slice(0, lastDot + 1) : cut + '.';
+  }
+
+  return summary;
 }
 
 /**
@@ -32,7 +70,7 @@ export function cleanTextForSpeech(rawText: string): string {
  */
 export function speakText(text: string, options: VoiceOptions = {}): Promise<void> {
   const platform = os.platform();
-  const cleanText = cleanTextForSpeech(text);
+  const cleanText = createVoiceSummary(text);
 
   if (!cleanText) return Promise.resolve();
 
@@ -66,43 +104,22 @@ export function speakText(text: string, options: VoiceOptions = {}): Promise<voi
 }
 
 /**
- * Stream voice synthesis queue
+ * Stream voice synthesis player
  */
 export class VoiceStreamPlayer {
-  private queue: string[] = [];
-  private isSpeaking = false;
   private enabled = true;
 
   constructor(enabled = true) {
     this.enabled = enabled;
   }
 
-  public enqueue(sentence: string) {
+  public async speakSummary(fullText: string) {
     if (!this.enabled) return;
-    const cleaned = sentence.trim();
-    if (cleaned.length > 0) {
-      this.queue.push(cleaned);
-      this.processQueue();
+    const summary = createVoiceSummary(fullText);
+    if (summary) {
+      await speakText(summary);
     }
   }
 
-  private async processQueue() {
-    if (this.isSpeaking || this.queue.length === 0) return;
-
-    this.isSpeaking = true;
-    const textToSpeak = this.queue.shift();
-
-    if (textToSpeak) {
-      process.stdout.write(chalk.dim(' 🔊'));
-      await speakText(textToSpeak);
-    }
-
-    this.isSpeaking = false;
-    this.processQueue();
-  }
-
-  public stop() {
-    this.queue = [];
-    this.isSpeaking = false;
-  }
+  public stop() {}
 }
