@@ -14,6 +14,9 @@ import { execCommand } from '../dist/commands/exec.js';
 import { listenCommand } from '../dist/commands/listen.js';
 import { keysCommand } from '../dist/commands/keys.js';
 import { openCommand } from '../dist/commands/open.js';
+import { installCommand } from '../dist/commands/install.js';
+import { repairCommand } from '../dist/commands/repair.js';
+import { diagnoseCommand } from '../dist/commands/diagnose.js';
 
 // Prevent unhandled errors from force-closing the CLI process
 process.on('uncaughtException', (err) => {
@@ -46,6 +49,27 @@ program
     printBanner();
   });
 
+// Install command
+program
+  .command('install')
+  .description('Install any application automatically via native package managers (winget/brew/apt)')
+  .argument('<appName>', 'Application name or package ID (e.g. git, vscode, node, python, chrome)')
+  .action(installCommand);
+
+// Repair / Fix command
+program
+  .command('repair')
+  .alias('fix')
+  .description('Autonomous problem-solving engine to diagnose & repair broken applications or system PATH')
+  .argument('[appName]', 'Application name to repair, or leave empty to repair entire system environment')
+  .action(repairCommand);
+
+// Diagnose command
+program
+  .command('diagnose')
+  .description('Scan system readiness, installed developer tools, and overall environment health')
+  .action(diagnoseCommand);
+
 // Connect command
 program
   .command('connect')
@@ -54,6 +78,7 @@ program
   .option('--endpoint <url>', 'OPVIS cloud endpoint', 'https://app.opvis.fun')
   .option('--name <name>', 'Machine name identifier')
   .action(connectCommand);
+
 
 // Listen / Daemon Mode command
 program
