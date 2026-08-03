@@ -1,6 +1,6 @@
 // ============================================================
-// O.P.V.I.S. Bridge — Styled Popup Approval Modal Utility
-// Renders clean visual Approve/Reject modal box & System GUI Popups
+// O.P.V.I.S. Bridge — Desktop GUI & Terminal Popup Modal Utility
+// Pops up clickable Native Windows/macOS/Linux Desktop Confirmation Window
 // ============================================================
 
 import readline from 'readline';
@@ -14,10 +14,65 @@ export interface PopupOptions {
 }
 
 /**
- * Display a styled Terminal Approve/Reject Popup Box Modal
+ * Display Native OS Desktop GUI Popup Box (Windows, macOS, Linux)
+ * Pops up a real clickable OS dialog window over all applications!
+ */
+export function showSystemGuiPopup(title: string, message: string): boolean {
+  const platform = os.platform();
+  const safeTitle = title.replace(/'/g, "''").replace(/[\r\n]+/g, ' ');
+  const safeMsg = message.replace(/'/g, "''").replace(/[\r\n]+/g, ' ');
+
+  if (platform === 'win32') {
+    try {
+      // Native Windows WScript.Shell Popup Window with Yes (6) and No (7) clickable buttons
+      const cmd = `powershell -NoProfile -Command "if ((New-Object -ComObject WScript.Shell).Popup('${safeMsg}', 0, '${safeTitle}', 4 + 32) -eq 6) { exit 0 } else { exit 1 }"`;
+      execSync(cmd, { stdio: 'ignore' });
+      return true; // Clicked YES
+    } catch {
+      return false; // Clicked NO or closed window
+    }
+  } else if (platform === 'darwin') {
+    try {
+      const osaScript = `display dialog "${safeMsg.replace(/"/g, '\\"')}" with title "${safeTitle.replace(/"/g, '\\"')}" buttons {"Reject", "Approve"} default button "Approve"`;
+      const out = execSync(`osascript -e '${osaScript}'`, { encoding: 'utf8' });
+      return out.includes('button returned:Approve');
+    } catch {
+      return false;
+    }
+  } else if (platform === 'linux') {
+    try {
+      execSync(`zenity --question --title="${safeTitle}" --text="${safeMsg}"`, { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Display a styled Terminal Approve/Reject Popup Box Modal or Desktop Window
  */
 export function showApproveRejectPopup(message: string, options: PopupOptions = {}): Promise<boolean> {
   const title = options.title || 'OPVIS AUTHORIZATION POPUP';
+
+  // 1. Try Desktop GUI Popup Window first (Windows WScript / macOS osascript / Linux Zenity)
+  if (options.useGuiFallback !== false) {
+    try {
+      console.log(chalk.cyan(`\n  [🔔 DESKTOP POPUP WINDOW] Waiting for user approval on Desktop GUI Dialog...`));
+      const approved = showSystemGuiPopup(title, message);
+      if (approved) {
+        console.log(`  ${chalk.green.bold('✔ AUTHORIZED:')} Action Approved by user via Desktop GUI Window.\n`);
+        return Promise.resolve(true);
+      } else {
+        console.log(`  ${chalk.red.bold('✖ REJECTED:')} Action Rejected by user via Desktop GUI Window.\n`);
+        return Promise.resolve(false);
+      }
+    } catch {}
+  }
+
+  // 2. Fallback to Styled Terminal Box if Desktop GUI is unavailable
   const width = Math.min(Math.max(message.length + 12, 58), 75);
 
   const topBorder = `  ╔${'═'.repeat(width - 2)}╗`;
@@ -40,7 +95,6 @@ export function showApproveRejectPopup(message: string, options: PopupOptions = 
   console.log(chalk.cyan(padCenter(chalk.bold.yellow(title))));
   console.log(chalk.cyan(midBorder));
   
-  // Wrap message lines if long
   const msgLines = message.match(new RegExp(`.{1,${width - 6}}`, 'g')) || [message];
   msgLines.forEach((line) => {
     console.log(chalk.cyan(padLine(chalk.white(line))));
@@ -52,23 +106,13 @@ export function showApproveRejectPopup(message: string, options: PopupOptions = 
   console.log(chalk.cyan(padCenter(optionsLine)));
   console.log(chalk.cyan(bottomBorder));
 
-  // Try System GUI Popup if desktop fallback requested
-  if (options.useGuiFallback) {
-    try {
-      const guiResult = showSystemGuiPopup(title, message);
-      if (guiResult !== null) {
-        return Promise.resolve(guiResult);
-      }
-    } catch {}
-  }
-
   // Interactive Readline Prompt
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
-  const promptText = `  ${chalk.yellow('?')} Select Choice ${chalk.gray('(Press A for Approve / R for Reject)')} [A/r]: `;
+  const promptText = `  ${chalk.yellow('?')} Select Choice ${chalk.gray('(Type A to Approve / R to Reject)')} [A/r]: `;
 
   return new Promise((resolve) => {
     rl.question(promptText, (answer) => {
@@ -85,36 +129,6 @@ export function showApproveRejectPopup(message: string, options: PopupOptions = 
   });
 }
 
-/**
- * Display Native OS Desktop GUI Popup Box (Windows, macOS, Linux)
- */
-export function showSystemGuiPopup(title: string, message: string): boolean | null {
-  const platform = os.platform();
-
-  try {
-    if (platform === 'win32') {
-      const psScript = `
-        Add-Type -AssemblyName System.Windows.Forms
-        $result = [System.Windows.Forms.MessageBox]::Show("${message.replace(/"/g, '`"')}", "${title.replace(/"/g, '`"')}", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
-        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) { exit 0 } else { exit 1 }
-      `;
-      execSync(`powershell -NoProfile -Command "${psScript.replace(/\n/g, ' ')}"`, { stdio: 'ignore' });
-      return true;
-    } else if (platform === 'darwin') {
-      const osaScript = `display dialog "${message.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}" buttons {"Reject", "Approve"} default button "Approve"`;
-      const out = execSync(`osascript -e '${osaScript}'`, { encoding: 'utf8' });
-      return out.includes('button returned:Approve');
-    } else if (platform === 'linux') {
-      execSync(`zenity --question --title="${title}" --text="${message}"`, { stdio: 'ignore' });
-      return true;
-    }
-  } catch {
-    return false;
-  }
-
-  return null;
-}
-
 export function confirmAction(question: string, defaultYes = false): Promise<boolean> {
-  return showApproveRejectPopup(question, { title: 'OPVIS ACTION CONFIRMATION' });
+  return showApproveRejectPopup(question, { title: 'OPVIS ACTION CONFIRMATION', useGuiFallback: true });
 }
