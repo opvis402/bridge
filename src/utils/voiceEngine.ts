@@ -14,11 +14,25 @@ export interface VoiceOptions {
 }
 
 /**
+ * Strip Markdown tags and symbols for clean spoken audio
+ */
+export function cleanTextForSpeech(rawText: string): string {
+  return rawText
+    .replace(/\*\*(.*?)\*\*/g, '$1') // Bold **text**
+    .replace(/\*(.*?)\*/g, '$1')     // Italic *text*
+    .replace(/`(.*?)`/g, '$1')       // Inline code `code`
+    .replace(/#+\s/g, '')            // Headings # ## ###
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Markdown links [text](url)
+    .replace(/[`"$]/g, '')           // Shell special chars
+    .trim();
+}
+
+/**
  * Text-to-Speech Engine for Windows, macOS, and Linux
  */
 export function speakText(text: string, options: VoiceOptions = {}): Promise<void> {
   const platform = os.platform();
-  const cleanText = text.replace(/[`"$]/g, '').trim();
+  const cleanText = cleanTextForSpeech(text);
 
   if (!cleanText) return Promise.resolve();
 
