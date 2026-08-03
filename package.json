@@ -1,6 +1,6 @@
 {
   "name": "@opvis402/bridge",
-  "version": "1.0.2-6",
+  "version": "1.0.3",
   "description": "O.P.V.I.S. Bridge — Local agent CLI for connecting to OPVIS cloud",
   "type": "module",
   "bin": {
