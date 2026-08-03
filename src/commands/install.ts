@@ -7,8 +7,9 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { logger } from '../utils/logger.js';
 import { executeInstall, detectPackageManager, APP_DICTIONARY } from '../utils/installer.js';
+import { confirmAction, showApproveRejectPopup } from '../utils/prompt.js';
 
-export async function installCommand(appName: string) {
+export async function installCommand(appName: string, options: { yes?: boolean } = {}) {
   logger.header('OPVIS Bridge — Install Application');
   logger.keyValue('Target Application', appName);
   
@@ -28,6 +29,18 @@ export async function installCommand(appName: string) {
   
   logger.footer();
 
+  // User approval popup
+  if (!options.yes) {
+    const confirmed = await showApproveRejectPopup(`Authorization Request: Install "${appName}" on this system via package engine [${pm.name}]`, {
+      title: 'OPVIS INSTALLATION APPROVAL POPUP',
+      useGuiFallback: true,
+    });
+    if (!confirmed) {
+      console.log(chalk.yellow('\n  [!] Installation cancelled by user.\n'));
+      return;
+    }
+  }
+
   const spinner = ora(`Installing "${appName}" using ${pm.name}...`).start();
 
   try {
@@ -44,3 +57,4 @@ export async function installCommand(appName: string) {
     spinner.fail(chalk.red(`Installation error: ${err.message}`));
   }
 }
+
