@@ -110,7 +110,7 @@ export async function voiceCommand(options: VoiceOptions) {
         const reader = res.body?.getReader();
         const decoder = new TextDecoder();
 
-        let sentenceBuffer = '';
+        let fullResponseText = '';
 
         if (reader) {
           while (true) {
@@ -128,26 +128,20 @@ export async function voiceCommand(options: VoiceOptions) {
                   const parsed = JSON.parse(data);
                   const text = parsed.response || '';
                   process.stdout.write(chalk.white(text));
-
-                  sentenceBuffer += text;
-                  // Speak in sentence chunks for natural streaming rhythm
-                  if (sentenceBuffer.includes('.') || sentenceBuffer.includes('!') || sentenceBuffer.includes('?')) {
-                    player.enqueue(sentenceBuffer);
-                    sentenceBuffer = '';
-                  }
+                  fullResponseText += text;
                 } catch {
                   process.stdout.write(chalk.white(data));
-                  sentenceBuffer += data;
+                  fullResponseText += data;
                 }
               }
             }
           }
 
-          if (sentenceBuffer.trim().length > 0) {
-            player.enqueue(sentenceBuffer);
-          }
-
           console.log('');
+
+          if (voiceEnabled && fullResponseText.trim()) {
+            await player.speakSummary(fullResponseText);
+          }
         }
       } catch (err: any) {
         spinner.fail(chalk.red('Voice stream error'));
