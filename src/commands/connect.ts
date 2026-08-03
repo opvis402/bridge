@@ -354,7 +354,7 @@ export async function connectCommand(options: ConnectOptions) {
         const reader = chatRes.body?.getReader();
         const decoder = new TextDecoder();
 
-        let sentenceBuffer = '';
+        let fullResponseText = '';
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
@@ -371,27 +371,20 @@ export async function connectCommand(options: ConnectOptions) {
                   const parsed = JSON.parse(data);
                   if (parsed.response) {
                     process.stdout.write(chalk.white(parsed.response));
-                    if (voiceEnabled) {
-                      sentenceBuffer += parsed.response;
-                      if (sentenceBuffer.includes('.') || sentenceBuffer.includes('!') || sentenceBuffer.includes('?')) {
-                        voicePlayer.enqueue(sentenceBuffer);
-                        sentenceBuffer = '';
-                      }
-                    }
+                    fullResponseText += parsed.response;
                   }
                 } catch {
                   process.stdout.write(chalk.white(data));
-                  if (voiceEnabled) {
-                    sentenceBuffer += data;
-                  }
+                  fullResponseText += data;
                 }
               }
             }
           }
-          if (voiceEnabled && sentenceBuffer.trim().length > 0) {
-            voicePlayer.enqueue(sentenceBuffer);
-          }
           console.log('\n');
+
+          if (voiceEnabled && fullResponseText.trim()) {
+            await voicePlayer.speakSummary(fullResponseText);
+          }
         }
       } catch (err: any) {
         aiSpinner.fail(chalk.red('Network error'));
