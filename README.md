@@ -13,6 +13,19 @@
 
 The **OPVIS Bridge CLI** (`@opvis402/bridge`) connects your local workstation (Windows, Linux, macOS) to the **O.P.V.I.S. Cloud Platform**. Features ultra-lightweight memory footprint (~15MB RAM), native desktop GUI popup authorizations, automated cross-platform app installations, problem-solving repair engine, and voice streaming text-to-speech interaction.
 
+## 🎬 Live System Operation Video
+
+Watch the O.P.V.I.S. CLI Bridge in action (terminal handshake, remote command execution, Llama 3.1 70B AI streaming, and GUI app launching):
+
+<div align="center" style="margin: 20px 0;">
+  <video src="https://opvis.fun/video.mp4" controls width="100%" style="max-width: 850px; border-radius: 12px; border: 1px solid #00f3ff; box-shadow: 0 0 25px rgba(0, 243, 255, 0.4); display: block; margin: 0 auto;"></video>
+  <p style="margin-top: 10px; font-size: 0.85em; color: #8899a6;">
+    📺 <em>If the video preview does not play automatically in your markdown renderer, <a href="https://opvis.fun/video.mp4" target="_blank">Click here to watch the MP4 video directly</a> or visit <a href="https://opvis.fun" target="_blank">opvis.fun</a>.</em>
+  </p>
+</div>
+
+---
+
 ## 🚀 Quick Start (One-Click NPX)
 
 Run directly without installation:
