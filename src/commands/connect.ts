@@ -10,6 +10,10 @@ import { exec } from 'child_process';
 import { logger } from '../utils/logger.js';
 import { saveConfig, getEndpoint } from '../utils/auth.js';
 import { launchApp } from '../utils/appLauncher.js';
+import { installCommand } from './install.js';
+import { repairCommand } from './repair.js';
+import { diagnoseCommand } from './diagnose.js';
+import { VoiceStreamPlayer, speakText } from '../utils/voiceEngine.js';
 
 interface ConnectOptions {
   apiKey: string;
@@ -107,6 +111,44 @@ export async function connectCommand(options: ConnectOptions) {
               continue;
             }
 
+            if (cmdText.startsWith('install ')) {
+              const appTarget = cmdText.replace(/^install\s+/, '').trim();
+              console.log(chalk.cyan(`  [🚀 REMOTE INSTALL] Installing "${appTarget}"...`));
+              await installCommand(appTarget, { yes: true });
+
+              await fetch(`${endpoint}/api/bridge/commands`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'update',
+                  command_id: item.id,
+                  output: `Remote installation of "${appTarget}" completed.`,
+                  exit_code: 0,
+                  status: 'completed',
+                }),
+              });
+              continue;
+            }
+
+            if (cmdText.startsWith('repair ') || cmdText.startsWith('fix ')) {
+              const appTarget = cmdText.replace(/^(repair|fix)\s+/, '').trim();
+              console.log(chalk.cyan(`  [🧠 REMOTE REPAIR] Repairing "${appTarget}"...`));
+              await repairCommand(appTarget, { yes: true });
+
+              await fetch(`${endpoint}/api/bridge/commands`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'update',
+                  command_id: item.id,
+                  output: `Remote repair of "${appTarget}" completed.`,
+                  exit_code: 0,
+                  status: 'completed',
+                }),
+              });
+              continue;
+            }
+
             exec(cmdText, { maxBuffer: 10 * 1024 * 1024 }, async (err, stdout, stderr) => {
               const output = stdout + (stderr ? `\n[STDERR]\n${stderr}` : '');
               const exitCode = err ? (err.code || 1) : 0;
@@ -178,6 +220,9 @@ export async function connectCommand(options: ConnectOptions) {
     process.on('SIGTERM', handleExit);
 
     // 4. Interactive Terminal REPL Chat Loop
+    let voiceEnabled = false;
+    let voicePlayer = new VoiceStreamPlayer(false);
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -193,14 +238,67 @@ export async function connectCommand(options: ConnectOptions) {
         return;
       }
 
-      if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'quit') {
+      const lower = input.toLowerCase();
+
+      if (lower === 'exit' || lower === 'quit') {
         rl.close();
         await handleExit();
         return;
       }
 
-      if (input.toLowerCase() === 'clear') {
+      if (lower === 'clear') {
         console.clear();
+        rl.prompt();
+        return;
+      }
+
+      // Voice mode toggle command
+      if (lower === 'voice' || lower === 'voice on' || lower === 'talk' || lower === 'voice mode') {
+        voiceEnabled = !voiceEnabled;
+        voicePlayer = new VoiceStreamPlayer(voiceEnabled);
+        if (voiceEnabled) {
+          console.log(chalk.cyan('\n  [🎙 VOICE STREAM ACTIVATED] Text-to-Speech audio output enabled.\n'));
+          speakText('OPVIS Voice stream activated.');
+        } else {
+          console.log(chalk.yellow('\n  [🎙 VOICE STREAM DEACTIVATED] Audio output disabled.\n'));
+        }
+        rl.prompt();
+        return;
+      }
+
+      if (lower === 'voice off') {
+        voiceEnabled = false;
+        voicePlayer = new VoiceStreamPlayer(false);
+        console.log(chalk.yellow('\n  [🎙 VOICE STREAM DEACTIVATED] Audio output disabled.\n'));
+        rl.prompt();
+        return;
+      }
+
+      // Local install command shortcut
+      if (lower.startsWith('install ') || lower.startsWith('opvis install ')) {
+        const appTarget = input.replace(/^(opvis\s+)?install\s+/, '').trim();
+        rl.pause();
+        await installCommand(appTarget);
+        rl.resume();
+        rl.prompt();
+        return;
+      }
+
+      // Local repair/fix command shortcut
+      if (lower.startsWith('repair ') || lower.startsWith('fix ') || lower.startsWith('opvis repair ') || lower.startsWith('opvis fix ')) {
+        const appTarget = input.replace(/^(opvis\s+)?(repair|fix)\s+/, '').trim();
+        rl.pause();
+        await repairCommand(appTarget);
+        rl.resume();
+        rl.prompt();
+        return;
+      }
+
+      // Local diagnose command shortcut
+      if (lower === 'diagnose' || lower === 'opvis diagnose') {
+        rl.pause();
+        await diagnoseCommand();
+        rl.resume();
         rl.prompt();
         return;
       }
@@ -256,6 +354,7 @@ export async function connectCommand(options: ConnectOptions) {
         const reader = chatRes.body?.getReader();
         const decoder = new TextDecoder();
 
+        let sentenceBuffer = '';
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
@@ -272,12 +371,25 @@ export async function connectCommand(options: ConnectOptions) {
                   const parsed = JSON.parse(data);
                   if (parsed.response) {
                     process.stdout.write(chalk.white(parsed.response));
+                    if (voiceEnabled) {
+                      sentenceBuffer += parsed.response;
+                      if (sentenceBuffer.includes('.') || sentenceBuffer.includes('!') || sentenceBuffer.includes('?')) {
+                        voicePlayer.enqueue(sentenceBuffer);
+                        sentenceBuffer = '';
+                      }
+                    }
                   }
                 } catch {
                   process.stdout.write(chalk.white(data));
+                  if (voiceEnabled) {
+                    sentenceBuffer += data;
+                  }
                 }
               }
             }
+          }
+          if (voiceEnabled && sentenceBuffer.trim().length > 0) {
+            voicePlayer.enqueue(sentenceBuffer);
           }
           console.log('\n');
         }
